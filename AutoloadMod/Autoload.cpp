@@ -313,47 +313,76 @@ namespace
             std::filesystem::path dst(src);
             dst.replace_filename(src.stem());
             FString fstr_dst(dst.wstring().c_str());
+            const int max_retries = 5;
+            int num_retries = 0;
             Debug2(L"Working on:", dst.filename().wstring());
             switch (action)
             {
-                case CommitAction::HotSwap:
-                    if (g_unmount(fstr_dst)) { Debug(L"  Unmounted pak."); }
+            case CommitAction::HotSwap:
+                num_retries = 0;
+                while (num_retries < max_retries)
+                {
+                    if (g_unmount(fstr_dst))
+                    {
+                        Debug(L"  Unmounted pak.");
+                        break;
+                    }
                     else
                     {
                         Warn(L"  Failed to unmount pak.");
-                        Warn(L"  Proceeding to replace file anyway...");
+                        num_retries++;
+                        if (num_retries < max_retries)
+                        {
+                            Warn(L"  Sleeping for 200ms and trying again.");
+                            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                        }
                     }
+                }
 
-                    err.clear();
-                    Debug(L"  Deleting pak...");
+                num_retries = 0;
+                err.clear();
+                Debug(L"  Deleting pak...");
+                while (num_retries < max_retries)
+                {
                     std::filesystem::remove(dst, err);
-                    while (err)
-                    {
-                        Warn(L"  Delete failed. Sleeping for 200ms and trying again...");
-                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                        std::filesystem::remove(dst, err);
+                    if (!err) {
+                      break;
                     }
-
-                    // Renaming is more likely to succeed with a bit of buffer time.
+                    Warn(L"  Delete failed. Sleeping for 200ms and trying again...");
+                    num_retries++;
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                }
+                if (num_retries == max_retries) {
+                    Error(L"  Delete failed. Aborting...");
+                    continue;
+                }
 
-                    // fallthrough
-                case CommitAction::RenameAndMount:
-                    err.clear();
-                    Debug(L"  Renaming staged pak...");
+                // Renaming is more likely to succeed with a bit of buffer time.
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+                // fallthrough
+            case CommitAction::RenameAndMount:
+                err.clear();
+                Debug(L"  Renaming staged pak...");
+                std::filesystem::rename(src, dst, err);
+                while (err)
+                {
+                    Warn(L"  Rename failed. Sleeping for 200ms and trying again...");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
                     std::filesystem::rename(src, dst, err);
-                    while (err)
-                    {
-                        Warn(L"  Rename failed. Sleeping for 200ms and trying again...");
-                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                        std::filesystem::rename(src, dst, err);
-                    }
+                }
 
-                    // fallthrough
-                case CommitAction::MountOnly:
-                    if (g_mount(fstr_dst, 100)) { Debug(L"  Mounted pak."); }
-                    else { Error(L"  Failed to mount pak. Try again later."); }
-                    // fallthrough
+                // fallthrough
+            case CommitAction::MountOnly:
+                if (g_mount(fstr_dst, 100))
+                {
+                    Debug(L"  Mounted pak.");
+                }
+                else
+                {
+                    Error(L"  Failed to mount pak. Try again later.");
+                }
+                // fallthrough
             }
         }
     }

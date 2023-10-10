@@ -284,7 +284,7 @@ namespace
                 }
                 else
                 {
-                    //Debug2(L"Found pak that is already mounted:", src.wstring());
+                    Debug2(L"Found mounted pak:", src.wstring());
                 }
             }
             else if (dir_entry.path().extension() == ".staged")
@@ -313,30 +313,19 @@ namespace
             std::filesystem::path dst(src);
             dst.replace_filename(src.stem());
             FString fstr_dst(dst.wstring().c_str());
-            const int max_retries = 5;
+            const int max_retries = 10;
             int num_retries = 0;
             Debug2(L"Working on:", dst.filename().wstring());
             switch (action)
             {
             case CommitAction::HotSwap:
-                num_retries = 0;
-                while (num_retries < max_retries)
+                if (g_unmount(fstr_dst))
                 {
-                    if (g_unmount(fstr_dst))
-                    {
-                        Debug(L"  Unmounted pak.");
-                        break;
-                    }
-                    else
-                    {
-                        Warn(L"  Failed to unmount pak.");
-                        num_retries++;
-                        if (num_retries < max_retries)
-                        {
-                            Warn(L"  Sleeping for 200ms and trying again.");
-                            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                        }
-                    }
+                    Debug(L"  Unmounted pak.");
+                }
+                else
+                {
+                    Warn(L"  Failed to unmount pak. Attempting to proceed...");
                 }
 
                 num_retries = 0;
@@ -348,9 +337,9 @@ namespace
                     if (!err) {
                       break;
                     }
-                    Warn(L"  Delete failed. Sleeping for 200ms and trying again...");
+                    Warn(L"  Delete failed. Sleeping for 1s and trying again...");
                     num_retries++;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                 }
                 if (num_retries == max_retries) {
                     Error(L"  Delete failed. Aborting...");

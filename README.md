@@ -46,6 +46,7 @@ reliable.**
 
 - Check the UE4SS logs to make sure Autoload is working properly.
 - Autoload requires that you create a folder at `<game>\Content\Paks\Autoload`. This isn't created automatically.
+- Make sure you don't have any other programs reading the paks in your game files, e.g. UModel.
 
 ### Building
 
